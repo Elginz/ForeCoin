@@ -1,0 +1,7 @@
+pip3 install transformers
+pip3 install torch 
+pip install "numpy<2"
+pip install torch torchvision torchaudio
+pip install "git+https://github.com/amazon-science/chronos-forecasting.git#egg=chronos-forecasting"
+pip install flask flask-socketio python-socketio websocket-client pandas numpy scikit-learn joblib
+pip install lightgbm
