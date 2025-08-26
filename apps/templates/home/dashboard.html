@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Crypto Advisor - Market Overview</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link type="text/css" href="/static/assets/css/volt.css" rel="stylesheet">
+    <style>
+        .price-card, .sentiment-card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .sentiment-item { border-bottom: 1px solid #e9ecef; padding: 1rem 0; }
+        .sentiment-item:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    {% include 'includes/sidebar.html' %}
+    <main class="content">
+        {% include 'includes/navigation.html' %}
+
+        <div class="row">
+            <!-- Key Prices Column -->
+            <div class="col-12 col-lg-4 mb-4">
+                <div class="card price-card border-0 shadow">
+                    <div class="card-header bg-dark text-white"><h2 class="fs-5 fw-bold mb-0">Key Prices</h2></div>
+                    <div class="card-body">
+                        <!-- Bitcoin Price -->
+                        {% set btc_data = initial_data.get('BTCUSDT', {}) %}
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">Bitcoin (BTC)</h5>
+                            <span id="current-price-BTCUSDT" class="fw-bold fs-5">${{ "%.2f" % btc_data.get('kline', {}).get('close', 0) }}</span>
+                        </div>
+                        <!-- Dogecoin Price -->
+                        {% set doge_data = initial_data.get('DOGEUSDT', {}) %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Dogecoin (DOGE)</h5>
+                            <span id="current-price-DOGEUSDT" class="fw-bold fs-5">${{ "%.5f" % doge_data.get('kline', {}).get('close', 0) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Sentiment Column -->
+            <div class="col-12 col-lg-8 mb-4">
+                <div class="card sentiment-card border-0 shadow">
+                    <div class="card-header bg-dark text-white"><h2 class="fs-5 fw-bold mb-0">Market Sentiment Overview</h2></div>
+                    <div class="card-body p-2">
+                        {% for asset_symbol in assets %}
+                        <div class="sentiment-item d-flex justify-content-between align-items-center px-3">
+                            <h5 class="mb-0">{{ asset_symbol }}</h5>
+                            <span id="sentiment-label-{{ asset_symbol }}" class="badge bg-secondary">Loading...</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    {% include 'includes/scripts.html' %}
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='assets/js/dashboard_updater.js') }}"></script>
+</body>
+</html>
