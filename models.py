@@ -1,3 +1,11 @@
+"""
+This file is used to train the following models and load it in under Model_training
+- LightGBM (Quantile Regression) 
+- K- Nearest Neighbours (Supertrend) 
+
+"""
+
+
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
