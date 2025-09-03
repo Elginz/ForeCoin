@@ -22,20 +22,21 @@ ETHUSDT = './historic_data/stable/ETHUSDT_data.csv'
 DOGEUSDT = './historic_data/volatile/DOGEUSDT_data.csv'
 SHIBUSDT = './historic_data/volatile/SHIBUSDT_data.csv'
 
-
+# Function to load historical data from csv
+# Prepares values and context for Chronos
 def load_data(file_path):
-    """
-    Loads historical data from a CSV, prepares values and initial context for Chronos,
-    and initializes the Chronos pipeline.
-    Returns the DataFrame, values, context tensor, and pipeline.
-    """
+    # Load data and sort time
     df = pd.read_csv(file_path, parse_dates=["timestamp"])
     df = df.sort_values("timestamp")
 
+    # Extract closing price as a NumPy Array
     values = df["close"].values
-    # Context needs to be unsqueezed to add a batch dimension for pipeline.predict
-    context = torch.tensor(values, dtype=torch.float32).unsqueeze(0)  # shape [1, time_steps]
 
+    # Convert the historical prices into a PyTorch tensor.
+    # .unsqueeze(0) adds 'batch' dimension, for the shape [1, num_time_steps],
+    context = torch.tensor(values, dtype=torch.float32).unsqueeze(0)
+
+    # Load the pre-trained Chronos T5 model from Hugging Face.
     pipeline = ChronosPipeline.from_pretrained(
         "amazon/chronos-t5-large",
         device_map="auto",
@@ -45,48 +46,30 @@ def load_data(file_path):
     return df, values, context, pipeline
 
 
+# Function predicts next hours price. 
 def forecast_next_hour(df, values, context, pipeline, prediction_length=1):
-    """
-    Predicts the next hour's price using the Chronos T5 model.
-    
-    Args:
-        df (pd.DataFrame): The historical DataFrame, needed to determine the frequency.
-        values (np.array): The historical close prices.
-        context (torch.Tensor): The context tensor for the Chronos pipeline.
-        pipeline (ChronosPipeline): The loaded Chronos pipeline.
-        prediction_length (int): The number of future steps to predict.
-        
-    Returns:
-        tuple: A tuple containing forecast_timestamps, median, low, high.
-    """
-    # Reproducibility
+    # For reproducible forecasts
     set_seed(42)
 
-    # Forecast
-    # The context already has the batch dimension from load_data or previous updates
-    forecast = pipeline.predict(context, prediction_length)  # shape: [1, num_samples, prediction_length]
+    # Use pipline to forecast future prices, use only first item
+    forecast = pipeline.predict(context, prediction_length) 
     forecast_np = forecast[0].numpy()
 
-    # Get quantiles
+    # Get 10th, 50th and 90th quantiles
     low, median, high = np.quantile(forecast_np, [0.1, 0.5, 0.9], axis=0)
 
-    # Determine forecast timestamps
-    # This now correctly uses the 'df' passed as an argument
+    # Get last timestamp previous data
     last_timestamp = df["timestamp"].iloc[-1]
     
-    # Calculate frequency dynamically
-    # Ensure there are enough data points to calculate a meaningful frequency
+    # Calculate frequency of data
     if len(df["timestamp"]) > 1:
         freq = df["timestamp"].diff().mode()[0]
     else:
-        # Default to hourly if not enough data to infer frequency
+        # Error handler to use hourly data if not enough data 
         freq = pd.Timedelta(hours=1) 
-        
+    
+    # Generate timestamps for forcasting. Starts from next interval
     forecast_timestamps = pd.date_range(start=last_timestamp + freq, periods=prediction_length, freq=freq)
-
-    # Decision logic for next hour (moved to app.py for display there)
-    # last_price = values[-1]
-    # next_hour_prediction = median[0]
 
     return forecast_timestamps, median, low, high
 
