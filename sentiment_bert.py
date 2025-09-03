@@ -45,7 +45,7 @@ def predict_sentiment(text):
 
     return prediction_value, confidence_score
 
-# Example usage
+# Example texts to be used 
 if __name__ == "__main__":
     sample_text = "SEC Delays Decision on Trump-Linked Truth Social Bitcoin ETF Until September - CoinDesk."
     prediction, confidence = predict_sentiment(sample_text)
