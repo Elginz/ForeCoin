@@ -16,49 +16,58 @@ overall confidence score = sum of all cofidence scores/ number of articles
 """
 
 from sentiment_bert import predict_sentiment
-from bs4 import BeautifulSoup
-import requests
 from pygooglenews import GoogleNews
-import json
 import time
 
-# cryptocurrency search queries
+# cryptocurrency search queries for Google News
 BTCUSDT = 'Bitcoin OR BTC OR Crypto'
 BNBUSDT = 'Binance OR BNB OR Crypto'
 ETHUSDT = 'Ethereum OR ETH OR Crypto'
 DOGEUSDT = 'Dogecoin OR DOGE OR Crypto'
 SHIBUSDT = 'Shiba OR SHIB OR Crypto'
 
+# Scrapes Google News for headlines
 def scrape (crypto_coin):
     gn = GoogleNews()
-    s = gn.search(crypto_coin)
+    search_entries = gn.search(crypto_coin)
     article_list = []
-    for entry in s["entries"]:
+    for entry in search_entries["entries"]:
         article_list.append(entry["title"])
-        # print(entry["title"])
-        # small delay betwen processing articles to avoid errors in news servers.
+        # Set a delay betwen processing articles to avoid errors in news servers.
         time.sleep(0.25)
-    # print(f"Number of Articles: {len(article_list)}")
     return article_list
 
 
-# returns the overall score = (sum of weighted scores) / (sum of all confidence score)
-# returns the overall confidence = (sum of all confidence scores) / (number of articles)
+# Returns the following:
+#  Overall Score = (sum of weighted scores) / (sum of all confidence score)
+#  Overall confidence = (sum of all confidence scores) / (number of articles)
 def determine_sentiment(crypto_coin):
+    # Get list of news headlines 
     article_list = scrape(crypto_coin)
+    # Error handler for when no articles are found
+    if not article_list:
+        return 0.0, 0.0
+    
     total_score = 0
     total_confidence = 0
+
     for entry in article_list:
+        # Call FinBert model for sentiment prediction and confidence score
         prediction, confidence = predict_sentiment(entry)
-        # print(f"Prediction: {prediction}")
-        # print(f"Confidence: {confidence:.4f}")
+
+        # Get simple average.
+        # Negative:-1 , Neutral: 0, Positive: 1 
         total_score += prediction
         total_confidence += confidence
+
+    # Get average score and confidence
     final_score = total_score/len(article_list)
     final_confidence = total_confidence/len(article_list)
 
     return final_score, final_confidence
 
+
+# Script testing functionality
 if __name__ == "__main__":
     final_score, final_confidence = determine_sentiment(BNBUSDT)
     print(f"Final Score: {final_score}")
