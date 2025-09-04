@@ -16,8 +16,9 @@ import os
 # *** the old data used for model training is in historic_data, it saves from 2020-01-01 to 2025-06-07 ****
 
 
-#  Helper Function to get correct time interval 
+#  Helper Function to get the correct time interval 
 def get_api_interval(interval_str):
+    # Dictionary to map strings to the API constants
     intervals = {
         "1min": Client.KLINE_INTERVAL_1MINUTE,
         "5min": Client.KLINE_INTERVAL_5MINUTE,
@@ -25,24 +26,30 @@ def get_api_interval(interval_str):
         "12hr": Client.KLINE_INTERVAL_12HOUR,
         "1day": Client.KLINE_INTERVAL_1DAY
     }
+    # Get the constant from dictionary 
     interval = intervals.get(interval_str)
     if interval is None:
+        # Error handler if not supported
         raise ValueError("Unsupported time interval: choose from '1min', '5min', '1hr', '12hr', '1day'")
     return interval
 
 
 # Function to save data into same CSV file  
 def save_or_update_csv(new_df, symbol, output_folder):
+    # Path for output file 
     path = os.path.join(output_folder, f"{symbol}_data.csv")
-
+    # Check if CSV file exists
     if os.path.exists(path):
+        # If exist, read old data from CSV into df and convert columns to datetime
         existing_df = pd.read_csv(path)
         existing_df['timestamp'] = pd.to_datetime(existing_df['timestamp'])
         new_df['timestamp'] = pd.to_datetime(new_df['timestamp'])
-
+        # Combine the old and new df
         combined = pd.concat([existing_df, new_df])
+        # Sort data by timestamp
         combined = combined.drop_duplicates(subset='timestamp').sort_values('timestamp')
     else:
+        # If file doesnt exist, new data
         combined = new_df
 
     combined.to_csv(path, index=False)
@@ -59,26 +66,27 @@ def fetch_and_save_data(symbols, start_date_str, end_date_str, output_folder, in
         output_folder (str): The path to the folder where CSV files will be saved.
         interval_str (str): The candle interval (e.g., '1hr').
     """
+    # Initialise Binance client
     client = Client(api_key, api_secret)
     api_interval = get_api_interval(interval_str)
 
     # Ensure the output directory exists
     os.makedirs(output_folder, exist_ok=True)
-
     for symbol in symbols:
         print(f"\nFetching {interval_str} data for {symbol} from {start_date_str} to {end_date_str}...")
         try:
+            # Fetch historical klines (candlestick)
             klines = client.get_historical_klines(
                 symbol,
                 api_interval,
                 start_date_str,
                 end_str=end_date_str
             )
-
+            # Error handler if API returns no data
             if not klines:
                 print(f"No data found for {symbol} in the given range.")
                 continue
-
+            # Convert into pandas df to process
             df = pd.DataFrame(klines, columns=[
                 'timestamp', 'open', 'high', 'low', 'close', 'volume',
                 'close_time', 'quote_asset_volume', 'number_of_trades',
@@ -87,33 +95,25 @@ def fetch_and_save_data(symbols, start_date_str, end_date_str, output_folder, in
 
             # Convert timestamp to datetime and process numeric columns
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            # Ensure financial columns are treated as numbers
             numeric_cols = ['open', 'high', 'low', 'close', 'volume']
             for col in numeric_cols:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             
-            # Keep only the essential columns for our models
+            # Keep only the essential columns for the models
             df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
 
             print(f"Successfully fetched {len(df)} records for {symbol}.")
 
-            # Construct a filename compatible with our training scripts
-            filename = f"{symbol}_{interval_str}_data_{start_date_str}_to_{end_date_str}.csv"
-            
-            # FOR TESTING
-            # filename = f"test_{symbol}_{interval_str}_data_{start_date_str}_to_{end_date_str}.csv"
-            
-            full_path = os.path.join(output_folder, filename)
-            
             # Save to CSV with the 'timestamp' column, not as an index.
-            save_or_update_csv(df, symbol, output_folder)
-
-            
+            save_or_update_csv(df, symbol, output_folder)  
             print(f"Data for {symbol} updated")
 
+        # Error handler
         except Exception as e:
             print(f"An error occurred while fetching data for {symbol}: {e}")
 
-#  Main  Function 
+#  Main Function. calls data fetching for stbale and volatile assets
 def run_data_gathering_process(start_date, end_date, stable_assets, high_volatility_assets):
     # If end_date is in the future, the API will fetch data up to the latest available.
     base_folder = "historic_data"
@@ -135,7 +135,3 @@ def run_data_gathering_process(start_date, end_date, stable_assets, high_volatil
     fetch_and_save_data(high_volatility_assets, start_date, end_date, volatile_folder, interval_str="5min")
     
     print("\n---  Data Gathering Process Complete ---")
-
-# Main Process
-# if __name__ == '__main__':
-#     run_data_gathering_process(START_DATE, END_DATE)
