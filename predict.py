@@ -1,4 +1,11 @@
-# makes live predictions
+"""
+This script connects to the Binance WebSocket to receive live 1-hour candlestick data 
+for BTCUSDT, ETHUSDT, or BNBUSDT
+
+It then uses a pre-trained model to predict the closing price of the *next* hour.
+
+It also has a daily scheduled task to run `data_collect.py` to update historical data.
+"""
 
 import json
 import websocket
@@ -13,25 +20,24 @@ import threading
 import pytz
 from datetime import datetime
 
-"""
-Every time a 1-hour kline closes for BTCUSDT, ETHUSDT, or BNBUSDT
-- Receives the closed kline from the WebSocket.
-- Makes a prediction using the trained model.
-"""
 
-# Define assets and construct the WebSocket stream URL
+# Assets to track  and construct the WebSocket stream URL
 assets_symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+# Stream name
 kline_streams = [coin.lower() + '@kline_1h' for coin in assets_symbols]
 socket_streams_param = '/'.join(kline_streams)
 socket_url = "wss://stream.binance.com:9443/stream?streams=" + socket_streams_param
 
-# Function to load pre-trained models for BTCUSDT, ETHUSDT, BNBUSDT 
+# Load pre-trained models for BTCUSDT, ETHUSDT, BNBUSDT 
 def load_models(symbols):
     loaded_models = {}
+    # Folder for trained models
     models_dir = "trained_models"
     for symbol in symbols:
+        # File path for each model
         model_path = os.path.join(models_dir, f"{symbol}_rfr_model.pkl")
         try:
+            # Load the model
             model = joblib.load(model_path)
             loaded_models[symbol] = model
             print(f"Model for {symbol} loaded successfully.")
@@ -52,27 +58,28 @@ models_dict = load_models(assets_symbols)
 # the next closing price of a cryptocurrency, then prints a trend signal based on that prediction
 
 def process_kline_and_predict(kline_message_data):
-    # extracts the actual kline info from the websocket message
+    # Extracts the actual kline info from the websocket message
     kline_info = kline_message_data['k']
-    # the symbol could be BTCUSDT or ETHUSDT, etc
+    # The symbol could be BTCUSDT or ETHUSDT, etc
     symbol = kline_info['s']
     open_price = float(kline_info['o'])
     high_price = float(kline_info['h'])
     low_price = float(kline_info['l'])
     close_price = float(kline_info['c'])
     volume = float(kline_info['v'])
-    # convertst the timestamp from miliseconds to readable datetime
+    # Convert the timestamp from miliseconds to readable datetime
     event_time = pd.to_datetime(kline_message_data['E'], unit='ms')
     kline_close_time = pd.to_datetime(kline_info['T'], unit='ms')
-    # converts the numerical values into a numpy array as a 2d array
+    # Convert the numerical values into a numpy array as a 2d array
     features = np.array([[open_price, high_price, low_price, close_price, volume]])
-    # to retrieve the ML model corresponding to the symbol from models_dict 
+    # Check if model exist 
     if symbol in models_dict and models_dict[symbol] is not None:
         model = models_dict[symbol]
         try:
-            # uses the model to predict the next closing price, based on current kline data
+            # Use the model to predict the next closing price
             predicted_close = model.predict(features)[0]
             print(f"[{event_time}] {symbol}: Close={close_price:.2f}, Predicted Next Close={predicted_close:.2f}")
+            # Generate simple trading signal based on prediction
             if predicted_close > close_price:
                 print("  Signal: UP trend")
                 print("  Trading Advice: BUY")
@@ -86,24 +93,28 @@ def process_kline_and_predict(kline_message_data):
     else:
         print(f"No model available for {symbol}")
 
+
 # WebSocket callbacks
 def on_open(ws):
     print("[WebSocket Opened]")
 
-# error handlers
+# Error handlers
 def on_error(ws, error):
     print(f"[WebSocket Error] {error}")
 
 def on_close(ws, code, msg):
     print(f"[WebSocket Closed] Code: {code}, Msg: {msg}")
 
+# Whenever a mesage is received from websocket
 def on_message(ws, msg_str):
     try:
         data = json.loads(msg_str)
+        # checks if message is a 1 hour update
         if 'stream' in data and '@kline_1h' in data['stream']:
             kline_data = data['data']
             if kline_data['k']['x']:
                 print(f"\n--- Kline closed for {kline_data['k']['s']} ---")
+                # if Kline closed, make a prediction
                 process_kline_and_predict(kline_data)
     except Exception as e:
         print(f"Error processing message: {e}")
@@ -116,12 +127,13 @@ def update_and_run_data_collect():
     os.environ['END_DATE'] = end_date
     print(f"\n[Scheduler] Running data_collect.py with END_DATE={end_date}")
     try:
+        # run data_collect.py as a separate process
         subprocess.run(['python', 'data_collect.py'], check=True)
         print("[Scheduler] data_collect.py executed successfully.\n")
     except subprocess.CalledProcessError as e:
         print(f"[Scheduler Error] {e}")
 
-# Start scheduler thread
+# Fucntion to schedule data collection to 12:00 everyday
 def run_scheduler():
     schedule.every().day.at("12:00").do(update_and_run_data_collect)
     while True:
