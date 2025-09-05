@@ -1,4 +1,12 @@
 ### app.py ###
+"""
+This is the main app.py file
+
+This file serves to continunously collect data on the respective assets.
+
+It uses the data_collect.py helper functions
+"""
+
 
 # Main libraries
 from flask import Flask, render_template
@@ -21,7 +29,6 @@ import torch
 from datetime import datetime, timedelta
 import websocket
 import schedule
-import pytz
 
 #  Import local python files
 import data_collect
@@ -163,7 +170,7 @@ def load_all_models(symbols):
             print(f"--> ERROR: Could not load model for {symbol}: {e}")
             MODELS_DICT[symbol] = None
 
-# Loads pretrained chornos model
+# Loads pretrained chronos model
 def load_chronos_models():
     global CHRONOS_MODELS
     try:
@@ -219,7 +226,6 @@ def update_single_sentiment(symbol):
             print(f"An error occurred in sentiment update for {symbol}: {e}")
 
 # --- Prediction Logic ---
-# 
 def process_kline_and_predict(kline_message_data):
     # Get candle and symbol data from webscocket message
     kline_info = kline_message_data['k']
