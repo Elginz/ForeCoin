@@ -1,8 +1,12 @@
 """
-This script is used to evaluate and backtest the models, aligning with the objectives
-set in the preliminary project report. It runs separate backtests for the primary
-model (KNN/LGBM), Chronos T5, and Sentiment Analysis, and calculates detailed
-statistical and financial metrics for each.
+This is a backtesting.py file 
+
+It runs on a schedule (every hour at 30 minutes past the hour).
+It checks the performance of the current production models. 
+If a model's recent prediction accuracy drops below a defined threshold, it automatically
+triggers a retraining of that model using the functions
+
+imported from models.py.
 """
 
 import pandas as pd
@@ -11,249 +15,228 @@ import joblib
 import os
 import pandas_ta as ta
 import glob
-from sklearn.metrics import classification_report, mean_squared_error, r2_score
-from tqdm import tqdm
+from datetime import datetime
+import schedule
 import time
-import torch
+import json
+import warnings
 
-# --- Import local python files ---
-from predict_chronos import forecast_next_hour
-# Assuming webscraper can be used to simulate sentiment
-from webscraper import determine_sentiment
+# training functions from models.py 
+from models import train_knn_supertrend_model, train_lgbm_quantile_model
 
-# --- Configuration ---
+warnings.filterwarnings('ignore')
+
+# Paths for data, trained models and performance logs
 BASE_DATA_FOLDER = "historic_data"
 MODELS_FOLDER = "trained_models"
+LOG_FOLDER = "prediction_logs"
 STABLE_ASSETS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
 HIGH_VOLATILITY_ASSETS = ['DOGEUSDT', 'SHIBUSDT']
+ALL_ASSETS = STABLE_ASSETS + HIGH_VOLATILITY_ASSETS
 
-# --- Simulation Parameters ---
-INITIAL_CAPITAL = 10000
-TRADE_SIZE_PERCENT = 0.5
-TRANSACTION_COST_PERCENT = 0.001
+# --- Backtesting Parameters ---
+#TO check accuracy over the last 5 predictions.
+VALIDATION_WINDOW = 5
+# Must have at least 3/5 (60%) correct predictions.
+ACCURACY_THRESHOLD = 0.6  
 
-# --- Helper Functions ---
-def find_asset_data_file(symbol):
-    subfolder = 'stable' if symbol in STABLE_ASSETS else 'volatile'
-    search_path = os.path.join(BASE_DATA_FOLDER, subfolder, f"{symbol}_*.csv")
-    files = glob.glob(search_path)
-    if not files: return None
-    return max(files, key=os.path.getmtime)
+# This class is used to predict generation, validation, logging and retraining triggers
+class ModelValidator:
+    # initialises modelValidator
+    def __init__(self):
+        self.prediction_logs = {symbol: [] for symbol in ALL_ASSETS}
+        os.makedirs(LOG_FOLDER, exist_ok=True)
+        self.log_file_path = os.path.join(LOG_FOLDER, "backtest_log.json")
+        self.load_logs()
 
-def load_data_and_models(symbol):
-    print(f"\n--- Loading data and all models for {symbol} ---")
-    file_path = find_asset_data_file(symbol)
-    if not file_path:
-        print(f"  - Data file not found for {symbol}. Skipping.")
-        return None, None, None
-    df = pd.read_csv(file_path, parse_dates=['timestamp'])
-    
-    model_type = "knn_supertrend" if symbol in STABLE_ASSETS else "lgbm_quantile"
-    model_path = os.path.join(MODELS_FOLDER, f"{symbol}_{model_type}_model.pkl")
-    if not os.path.exists(model_path):
-        print(f"  - Primary model file not found at '{model_path}'. Skipping.")
-        return None, None, None
-    primary_model = joblib.load(model_path)
-
-    try:
-        from chronos import ChronosPipeline
-        pipeline = ChronosPipeline.from_pretrained(
-            "amazon/chronos-t5-tiny", device_map="auto",
-            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        )
-        chronos_model = {"pipeline": pipeline}
-        print("  - Data and all models loaded successfully.")
-        return df, primary_model, chronos_model
-    except ImportError:
-        print("  - Chronos library not found. Skipping Chronos model loading.")
-        return df, primary_model, None
-
-# --- Signal Generation Functions ---
-def generate_primary_signals(df, primary_model, symbol):
-    df_copy = df.copy()
-    df_copy['signal'] = 0
-    if symbol in STABLE_ASSETS:
-        df_copy.ta.supertrend(length=10, multiplier=3.0, append=True)
-        supertrend_col = next((col for col in df_copy.columns if col.startswith('SUPERT_')), None)
-        if supertrend_col:
-            feature_cols = ['open', 'high', 'low', 'close', 'volume', supertrend_col]
-            X = df_copy[feature_cols].dropna()
-            if not X.empty:
-                df_copy.loc[X.index, 'prediction'] = primary_model.predict(X)
-                buy = (df_copy['prediction'] > df_copy['close']) & (df_copy['close'] > df_copy[supertrend_col])
-                sell = (df_copy['prediction'] < df_copy['close']) & (df_copy['close'] < df_copy[supertrend_col])
-                df_copy.loc[buy, 'signal'] = 1
-                df_copy.loc[sell, 'signal'] = -1
-    elif symbol in HIGH_VOLATILITY_ASSETS:
-        X = df_copy[['open', 'high', 'low', 'close', 'volume']]
-        df_copy['pred_low'] = primary_model['low'].predict(X)
-        df_copy['pred_median'] = primary_model['median'].predict(X)
-        df_copy['pred_high'] = primary_model['high'].predict(X)
-        df_copy.loc[df_copy['close'] < df_copy['pred_low'], 'signal'] = 1
-        df_copy.loc[df_copy['close'] > df_copy['pred_high'], 'signal'] = -1
-    return df_copy
-
-def precompute_chronos_predictions(df, chronos_model):
-    print("Pre-computing Chronos T5 predictions for the backtest period...")
-    predictions = []
-    pipeline = chronos_model['pipeline']
-    context_size = 256
-    for i in tqdm(range(context_size, len(df)), desc="  - Forecasting with Chronos"):
-        context = torch.tensor(df['close'].values[i-context_size:i], dtype=torch.float32).unsqueeze(0)
-        forecast = pipeline.predict(context, 1)
-        median_forecast = np.quantile(forecast[0].numpy(), 0.5, axis=0)[0]
-        predictions.append(median_forecast)
-    full_predictions = [np.nan] * context_size + predictions
-    return pd.Series(full_predictions, index=df.index)
-
-def generate_chronos_signals(df):
-    df_copy = df.copy()
-    df_copy['signal'] = np.where(df_copy['chronos_pred'] > df_copy['close'], 1, -1)
-    df_copy.loc[df_copy['chronos_pred'].isna(), 'signal'] = 0
-    return df_copy
-
-def simulate_sentiment_signals(df):
-    print("Simulating sentiment signals...")
-    df_copy = df.copy()
-    sentiments = np.random.choice([-1, 0, 1], size=len(df_copy), p=[0.3, 0.4, 0.3])
-    df_copy['signal'] = sentiments
-    return df_copy
-
-# --- Backtesting and Metrics Calculation ---
-def run_backtest(df_with_signals):
-    capital = INITIAL_CAPITAL
-    position_size, position = 0, 0
-    portfolio_values, trades = [], []
-    for i in range(len(df_with_signals)):
-        row = df_with_signals.iloc[i]
-        if row['signal'] == 1 and position == 0:
-            trade_amount = capital * TRADE_SIZE_PERCENT
-            position_size = trade_amount / row['close']
-            capital -= position_size * row['close'] * (1 + TRANSACTION_COST_PERCENT)
-            position = 1
-            trades.append({'entry_price': row['close']})
-        elif row['signal'] == -1 and position == 1:
-            capital += position_size * row['close'] * (1 - TRANSACTION_COST_PERCENT)
-            position, position_size = 0, 0
-            if trades and 'exit_price' not in trades[-1]:
-                last_trade = trades[-1]
-                last_trade['exit_price'] = row['close']
-                last_trade['profit_pct'] = (last_trade['exit_price'] - last_trade['entry_price']) / last_trade['entry_price']
-        current_value = capital + (position_size * row['close'] if position == 1 else 0)
-        portfolio_values.append(current_value)
-    return pd.Series(portfolio_values, index=df_with_signals.index), trades
-
-def quantile_loss(y_true, y_pred, quantile):
-    error = y_true - y_pred
-    return np.mean(np.maximum(quantile * error, (quantile - 1) * error))
-
-def calculate_all_metrics(df, portfolio_values, trades, symbol, strategy_type):
-    results = {}
-    # --- Financial Metrics ---
-    final_value = portfolio_values.iloc[-1]
-    total_return = ((final_value - INITIAL_CAPITAL) / INITIAL_CAPITAL) * 100
-    returns = portfolio_values.pct_change().dropna()
-    
-    if len(df['timestamp']) > 1:
-        time_diff = df['timestamp'].diff().mode()[0]
-        periods_per_year = pd.Timedelta(days=365) / time_diff
-    else: periods_per_year = 252
-    sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(periods_per_year) if returns.std() != 0 else 0
-
-    results["--- Financial Performance ---"] = ""
-    results["Final Portfolio Value"] = f"${final_value:,.2f}"
-    results["Total Return"] = f"{total_return:.2f}%"
-    results["Sharpe Ratio (Annualized)"] = f"{sharpe_ratio:.2f}"
-    
-    completed_trades = [t for t in trades if 'exit_price' in t]
-    if completed_trades:
-        wins = sum(1 for t in completed_trades if t['profit_pct'] > 0)
-        win_rate = (wins / len(completed_trades)) * 100
-        results["Total Trades"] = len(completed_trades)
-        results["Win Rate"] = f"{win_rate:.2f}%"
-    else:
-        results["Total Trades"] = 0
-        results["Win Rate"] = "N/A"
-
-    # --- Model-Specific Statistical Metrics ---
-    if strategy_type == 'primary':
-        df_eval = df.dropna(subset=['signal']).copy()
-        df_eval['actual_movement'] = np.where(df_eval['close'].shift(-1) > df_eval['close'], 1, -1)
-        
-        results["\n--- Statistical Model Evaluation ---"] = ""
-        if symbol in STABLE_ASSETS:
-            active_signals_df = df_eval[df_eval['signal'] != 0]
-            report = classification_report(
-                active_signals_df['actual_movement'], active_signals_df['signal'], 
-                labels=[-1, 1], target_names=['SELL Signal', 'BUY Signal'], zero_division=0
-            )
-            results["Classification Report"] = f"\n{report}"
-        elif symbol in HIGH_VOLATILITY_ASSETS:
-            y_true = df_eval['close'].shift(-1).dropna()
-            y_pred_median = df_eval.loc[y_true.index, 'pred_median']
-            r2 = r2_score(y_true, y_pred_median)
-            rmse = np.sqrt(mean_squared_error(y_true, y_pred_median))
-            q_loss_low = quantile_loss(y_true, df_eval.loc[y_true.index, 'pred_low'], 0.1)
-            q_loss_high = quantile_loss(y_true, df_eval.loc[y_true.index, 'pred_high'], 0.9)
-            
-            results["R-Squared (Median Prediction)"] = f"{r2:.4f}"
-            results["RMSE (Median Prediction)"] = f"${rmse:.8f}"
-            results["Quantile Loss (Low 10%)"] = f"{q_loss_low:.8f}"
-            results["Quantile Loss (High 90%)"] = f"{q_loss_high:.8f}"
-            
-    return results
-
-# --- Main Execution ---
-def main():
-    assets_to_backtest = STABLE_ASSETS + HIGH_VOLATILITY_ASSETS
-    
-    for symbol in assets_to_backtest:
-        df, primary_model, chronos_model = load_data_and_models(symbol)
-        if df is None: continue
-            
+    # To load previous validation logs form a file
+    def load_logs(self):
+        # If the path exists
+        if os.path.exists(self.log_file_path):
+            try:
+                with open(self.log_file_path, 'r') as f:
+                    self.prediction_logs = json.load(f)
+                print("Successfully loaded existing prediction logs.")
+            # Error handler
+            except Exception as e:
+                print(f"Could not load logs, starting fresh. Error: {e}")
+        else:
+            print("No existing log file found. Starting fresh.")
+    # To save the logs
+    def save_logs(self):
+        """Saves the current validation logs to a file."""
         try:
-            backtest_df = df.tail(2016).copy().reset_index(drop=True)
-            
-            # --- Pre-computation Step for Chronos ---
-            chronos_pred_file = os.path.join(BASE_DATA_FOLDER, f"{symbol}_chronos_preds.csv")
-            if os.path.exists(chronos_pred_file):
-                print(f"Loading pre-computed Chronos predictions for {symbol}...")
-                backtest_df['chronos_pred'] = pd.read_csv(chronos_pred_file, index_col=0, header=0).squeeze("columns")
-            elif chronos_model:
-                chronos_predictions = precompute_chronos_predictions(backtest_df, chronos_model)
-                backtest_df['chronos_pred'] = chronos_predictions
-                backtest_df['chronos_pred'].to_csv(chronos_pred_file)
-                print(f"Saved Chronos predictions to {chronos_pred_file}")
-            else:
-                backtest_df['chronos_pred'] = np.nan
-
-            # --- Run Backtest 1: Primary Model (KNN/LGBM) ---
-            if primary_model:
-                df1 = generate_primary_signals(backtest_df.copy(), primary_model, symbol)
-                portfolio1, trades1 = run_backtest(df1)
-                results1 = calculate_all_metrics(df1, portfolio1, trades1, symbol, 'primary')
-                print(f"\n--- Backtest Results for {symbol} (Primary Model: {'KNN' if symbol in STABLE_ASSETS else 'LGBM'}) ---")
-                for key, value in results1.items(): print(f"  {key}: {value}")
-            
-            # --- Run Backtest 2: Chronos T5 Model ---
-            if not backtest_df['chronos_pred'].isna().all():
-                df2 = generate_chronos_signals(backtest_df.copy())
-                portfolio2, trades2 = run_backtest(df2)
-                results2 = calculate_all_metrics(df2, portfolio2, trades2, symbol, 'chronos')
-                print(f"\n--- Backtest Results for {symbol} (Chronos T5 Strategy) ---")
-                for key, value in results2.items(): print(f"  {key}: {value}")
-
-            # --- Run Backtest 3: Sentiment Model ---
-            df3 = simulate_sentiment_signals(backtest_df.copy())
-            portfolio3, trades3 = run_backtest(df3)
-            results3 = calculate_all_metrics(df3, portfolio3, trades3, symbol, 'sentiment')
-            print(f"\n--- Backtest Results for {symbol} (Sentiment Strategy) ---")
-            for key, value in results3.items(): print(f"  {key}: {value}")
-            
+            with open(self.log_file_path, 'w') as f:
+                json.dump(self.prediction_logs, f, indent=4)
         except Exception as e:
-            print(f"\nAn error occurred during the backtest for {symbol}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error saving prediction logs: {e}")
+    # Find the latest data csv 
+    def find_asset_data_file(self, symbol):
+        subfolder = 'stable' if symbol in STABLE_ASSETS else 'volatile'
+        search_path = os.path.join(BASE_DATA_FOLDER, subfolder, f"{symbol}_*.csv")
+        files = glob.glob(search_path)
+        return max(files, key=os.path.getmtime) if files else None
+    
+    def make_prediction(self, symbol):
+        """
+        Generates a new prediction for an asset using its current production model.
+        This logic is adapted from your app.py to be compatible.
+        """
+        try:
+            model_type = "knn_supertrend" if symbol in STABLE_ASSETS else "lgbm_quantile"
+            model_path = os.path.join(MODELS_FOLDER, f"{symbol}_{model_type}_model.pkl")
+            if not os.path.exists(model_path):
+                print(f"Model not found for {symbol}. Skipping prediction.")
+                return None, None
+
+            model_package = joblib.load(model_path)
+            
+            file_path = self.find_asset_data_file(symbol)
+            if not file_path: return None, None
+            df = pd.read_csv(file_path, parse_dates=['timestamp'])
+            
+            # Use last 200 rows for feature calculation
+            latest_data = df.tail(200).copy()
+            if len(latest_data) < 20: return None, None
+            
+            current_price = float(latest_data.iloc[-1]['close'])
+
+            if symbol in STABLE_ASSETS:
+                # Replicate K-NN feature engineering from models.py
+                latest_data.ta.supertrend(length=10, multiplier=3.0, append=True)
+                latest_data['price_change'] = latest_data['close'].pct_change()
+                latest_data['volatility'] = latest_data['close'].rolling(window=10).std()
+                latest_data['volume_ma'] = latest_data['volume'].rolling(window=5).mean()
+                latest_data.ffill(inplace=True)
+                latest_data.dropna(inplace=True)
+
+                if latest_data.empty:
+                    print(f"Not enough data for {symbol} after feature engineering. Skipping.")
+                    return None, None
+                
+                # ===== START FIX =====
+                # Get the exact list of feature columns the model was trained on
+                expected_features = model_package.get('feature_columns')
+                if not expected_features:
+                    print(f"ERROR: 'feature_columns' not found in model package for {symbol}.")
+                    return None, None
+                
+                # Select ONLY those features from the latest data point
+                features_for_prediction = latest_data.tail(1)[expected_features]
+                # ===== END FIX =====
+                
+                pipeline = model_package.get('pipeline')
+                predicted_price = pipeline.predict(features_for_prediction)[0]
+                return current_price, float(predicted_price)
+            
+            elif symbol in HIGH_VOLATILITY_ASSETS:
+                # LGBM prediction
+                features = latest_data.tail(1)[['open', 'high', 'low', 'close', 'volume']]
+                lgbm_median_model = model_package['median']
+                predicted_price = lgbm_median_model.predict(features)[0]
+                return current_price, float(predicted_price)
+        
+        except Exception as e:
+            print(f"Error making prediction for {symbol}: {e}")
+        return None, None
+
+    # Runs the cycle at every 30 minutes of an hour
+    def run_validation_cycle(self):
+        print(f"\n--- Running Validation Cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")   
+        for symbol in ALL_ASSETS:
+            print(f"\nProcessing {symbol}...")
+            
+            # Generate new prediction and get the price
+            current_price, predicted_price = self.make_prediction(symbol)
+            
+            if current_price is None or predicted_price is None:
+                continue
+            
+            # Check the previous prediction from the last cycle
+            # Check if a log list exists and is not empty
+            if self.prediction_logs.get(symbol):
+                last_log = self.prediction_logs[symbol][-1]
+                if last_log['actual_price_later'] is None:
+                    last_log['actual_price_later'] = current_price
+                    actual_direction = 'up' if current_price > last_log['price_at_prediction'] else 'down'
+                    last_log['actual_direction'] = actual_direction
+                    last_log['is_correct'] = (last_log['predicted_direction'] == actual_direction)
+                    print(f"  Validated previous prediction: Predicted {last_log['predicted_direction']}, Actual was {actual_direction}. Correct: {last_log['is_correct']}")
+
+            # Log the new prediction
+            log_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "price_at_prediction": current_price,
+                "predicted_price": predicted_price,
+                "predicted_direction": 'up' if predicted_price > current_price else 'down',
+                "actual_price_later": None,
+                "actual_direction": None,
+                "is_correct": None
+            }
+            self.prediction_logs.setdefault(symbol, []).append(log_entry)
+            
+            # Check if need to retrain
+            validated_logs = [log for log in self.prediction_logs.get(symbol, []) if log['is_correct'] is not None]
+            # Only check accuracy if have enough predictions
+            if len(validated_logs) >= VALIDATION_WINDOW:
+                recent_logs = validated_logs[-VALIDATION_WINDOW:]
+                correct_count = sum(1 for log in recent_logs if log['is_correct'])
+                accuracy = correct_count / len(recent_logs)
+                
+                print(f"  Recent accuracy over last {len(recent_logs)} predictions: {accuracy:.0%} ({correct_count}/{len(recent_logs)})")
+                # when accuracy below threshold
+                if accuracy < ACCURACY_THRESHOLD:
+                    print(f"  Accuracy is below {ACCURACY_THRESHOLD:.0%}. Triggering retraining...")
+                    self.trigger_retrain(symbol)
+                else:
+                    print(f"  Model performance is satisfactory. No retraining needed.")
+            else:
+                print(f"  Not enough validated predictions to check accuracy ({len(validated_logs)}/{VALIDATION_WINDOW}).")
+
+        # Save logs to disk after processing all assets
+        self.save_logs()
+
+    # Calls the appropriate training function from models.py
+    def trigger_retrain(self, symbol):
+        file_path = self.find_asset_data_file(symbol)
+        if not file_path:
+            print(f"  Could not find data file for {symbol} to retrain.")
+            return
+
+        print(f"Starting robust retraining for {symbol}...")
+        try:
+            if symbol in STABLE_ASSETS:
+                train_knn_supertrend_model(file_path)
+            else:
+                train_lgbm_quantile_model(file_path)
+            
+            # After retraining, clear the logs to refresh
+            self.prediction_logs[symbol] = []
+            print(f"  --- Retraining complete for {symbol}. Prediction log has been reset. ---")
+        except Exception as e:
+            print(f"  An error occurred during retraining: {e}")
+
+def main():
+    """Main function to set up and run the schedule."""
+    validator = ModelValidator()
+    
+    print("="*80)
+    print(" Automated Model Backtester and Retraining Service")
+    print(f" -> This script will run every hour at XX:30")
+    print(f" -> It will check the last {VALIDATION_WINDOW} predictions for each model.")
+    print(f" -> If accuracy is below {ACCURACY_THRESHOLD:.0%}, it will trigger a full retrain.")
+    print("="*80)
+
+    # Schedule the job
+    schedule.every().hour.at(":30").do(validator.run_validation_cycle)
+    
+    # Run once on startup to initialize
+    print("Running initial validation cycle on startup...")
+    validator.run_validation_cycle()
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
