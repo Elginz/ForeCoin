@@ -1,4 +1,3 @@
-### app.py ###
 """
 This is the main app.py file
 
@@ -6,8 +5,6 @@ This file serves to continunously collect data on the respective assets.
 
 It uses the data_collect.py helper functions
 """
-
-
 # Main libraries
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -124,9 +121,12 @@ def populate_initial_caches(symbols):
                     df_recent = df.tail(MAX_HISTORICAL_POINTS)
                     # Fill historical cache for chart
                     for _, row in df_recent.iterrows():
-                        HISTORICAL_DATA_CACHE[symbol].append({ "time": row['timestamp'].timestamp(), 
-                                                              "open": row['open'], "high": row['high'], 
-                                                              "low": row['low'], "close": row['close'] })
+                        HISTORICAL_DATA_CACHE[symbol].append({
+                            "time": row['timestamp'].timestamp(),
+                            "open": row['open'], "high": row['high'],
+                            "low": row['low'], "close": row['close'],
+                            "volume": row['volume']
+                        })
                     # Fill latest data cache
                     if not LATEST_DATA_CACHE.get(symbol) and not df_recent.empty:
                         last_row = df_recent.iloc[-1]
@@ -225,65 +225,82 @@ def update_single_sentiment(symbol):
         except Exception as e:
             print(f"An error occurred in sentiment update for {symbol}: {e}")
 
-# --- Prediction Logic ---
+#  Prediction Logic
 def process_kline_and_predict(kline_message_data):
-    # Get candle and symbol data from webscocket message
+    # Get candle and symbol data from websocket message
     kline_info = kline_message_data['k']
     symbol = kline_info['s']
     
-    # Check if sentiment is older than 30 minutes 
+    # Refresh sentiment data if it is older than 15 minutes 
     last_update = LAST_SENTIMENT_UPDATE.get(symbol)
     if not last_update or (datetime.now() - last_update) > timedelta(minutes=15):
-        # If older, update the sentiment
         if not SENTIMENT_LOCK.locked():
+            #  Run sentiment update in background thread
              socketio.start_background_task(update_single_sentiment, symbol=symbol)
 
-    # Initialise prediction
+    # placeholders
     knn_pred_val = None
     lgbm_preds = {'low': None, 'median': None, 'high': None}
     chronos_pred_val = None
     
-    # Run KNN/LGBM model prediction
-    model_or_models = MODELS_DICT.get(symbol)
-    if model_or_models:
+    # loaded pre-trained model
+    model_package = MODELS_DICT.get(symbol)
+    
+    if model_package:
         try:
-            # OHLCV Features from candle data
-            features_dict = {
-                'open': float(kline_info['o']), 'high': float(kline_info['h']),
-                'low': float(kline_info['l']), 'close': float(kline_info['c']),
-                'volume': float(kline_info['v'])
-            }
-            # STABLE assets (KNN Supertrend model)
-            if symbol in STABLE_ASSETS:
-                # Get data to calculate Supertrend indicator
-                history_df = pd.DataFrame(HISTORICAL_DATA_CACHE.get(symbol, []))
-                # Need enough data
-                if history_df.shape[0] > 20: 
-                    current_kline_df = pd.DataFrame([features_dict])
+            # STABLE assets (KNN model)
+            if symbol in STABLE_ASSETS and isinstance(model_package, dict):
+                history_data = HISTORICAL_DATA_CACHE.get(symbol, [])
+                # Only need enough history to compute features
+                if len(history_data) < 20: 
+                    print(f"Not enough historical data for {symbol} to calculate features.")
+                else:
+                    # Convert history and current candle into a dataframe
+                    history_df = pd.DataFrame(history_data)
+                    current_kline_data = {
+                        "open": float(kline_info['o']), "high": float(kline_info['h']),
+                        "low": float(kline_info['l']), "close": float(kline_info['c']),
+                        "volume": float(kline_info['v'])
+                    }
+                    current_kline_df = pd.DataFrame([current_kline_data])
                     combined_df = pd.concat([history_df, current_kline_df], ignore_index=True)
-
-                    # Calculate Supertrend indicator using pandas-ta
-                    indicator_df = ta.supertrend(high=combined_df['high'], low=combined_df['low'], close=combined_df['close'], length=10, multiplier=3.0)
+                    # Supertrend indicator
+                    combined_df.ta.supertrend(length=10, multiplier=3.0, append=True)
+                    supertrend_col = next((col for col in combined_df.columns if col.startswith('SUPERT_')), None)
+                    # Feature engineering
+                    combined_df['price_change'] = combined_df['close'].pct_change()
+                    combined_df['volatility'] = combined_df['close'].rolling(window=10).std()
+                    combined_df['volume_ma'] = combined_df['volume'].rolling(window=5).mean()
                     
-                    if indicator_df is not None and not indicator_df.empty:
-                        # Get supertrend column name
-                        supertrend_col_name = next((col for col in indicator_df.columns if col.startswith('SUPERT_')), None)
-                        if supertrend_col_name:
-                            last_supertrend_val = indicator_df[supertrend_col_name].iloc[-1]
-                            if not pd.isna(last_supertrend_val):
-                                # Calculated indicator 
-                                features_dict[supertrend_col_name] = last_supertrend_val
-                                feature_order = ['open', 'high', 'low', 'close', 'volume', supertrend_col_name]
-                                features_df = pd.DataFrame([features_dict], columns=feature_order)
-                                # Make prediction
-                                knn_pred_val = model_or_models.predict(features_df)[0]
+                    # Handle NaN values after feature creation
+                    combined_df.ffill(inplace=True) 
+                    combined_df.dropna(inplace=True)
+
+                    if not combined_df.empty:
+                        # Get most recent row as input features
+                        latest_features = combined_df.tail(1)
+                        # load scikit-learn pipeline and list of feature columns
+                        pipeline = model_package.get('pipeline')
+                        expected_features = model_package.get('feature_columns')
+                        
+                        if pipeline and expected_features:
+                            # Ensure feature columns match what the model expects
+                            features_for_prediction = latest_features[expected_features]
+                            knn_pred_val = pipeline.predict(features_for_prediction)[0]
 
             # VOLATILE assets (LGBM Quantile Model) 
-            elif symbol in HIGH_VOLATILITY_ASSETS and isinstance(model_or_models, dict):
+            elif symbol in HIGH_VOLATILITY_ASSETS and isinstance(model_package, dict):
+                # Ensure features_dict is defined correctly
+                features_dict = {
+                    'open': float(kline_info['o']), 'high': float(kline_info['h']),
+                    'low': float(kline_info['l']), 'close': float(kline_info['c']),
+                    'volume': float(kline_info['v'])
+                }
                 feature_order = ['open', 'high', 'low', 'close', 'volume']
                 features_df = pd.DataFrame([features_dict], columns=feature_order)
-                # Model consists of low, median and high
-                for name, model in model_or_models.items():
+                
+                # Predict using all quantiles
+                for name, model in model_package.items():
                     lgbm_preds[name] = model.predict(features_df)[0]
 
         except Exception as e:
@@ -293,10 +310,10 @@ def process_kline_and_predict(kline_message_data):
     if symbol in CHRONOS_MODELS and CHRONOS_MODELS[symbol] is not None:
         try:
             model_info = CHRONOS_MODELS[symbol]
-            # New closing price
+            # update the context with closing price
             new_price_tensor = torch.tensor([float(kline_info['c'])], dtype=model_info["context"].dtype)
             model_info["context"] = torch.cat([model_info["context"], new_price_tensor.unsqueeze(0)], dim=1)[:, -1024:]
-            # Forecast for next hour
+            # Forecast next hour
             _, median, _, _ = forecast_next_hour(model_info["df"], model_info["df"]["close"].values, model_info["context"], model_info["pipeline"])
             chronos_pred_val = median[0]
         except Exception as e:
@@ -318,13 +335,13 @@ def process_kline_and_predict(kline_message_data):
         "sentiment": SENTIMENT_CACHE.get(symbol, {}),
         "event_time_iso": pd.to_datetime(kline_message_data['E'], unit='ms').isoformat()
     }
-    # Update in-memory cache with new data point
+    # Update the local cache with the new data
+    new_kline_for_cache = {"time": live_update_data["kline"]["time"], "open": live_update_data["kline"]["open"], "high": live_update_data["kline"]["high"], "low": live_update_data["kline"]["low"], "close": live_update_data["kline"]["close"], "volume": float(kline_info['v'])}
+
     if len(HISTORICAL_DATA_CACHE.get(symbol, [])) >= MAX_HISTORICAL_POINTS: HISTORICAL_DATA_CACHE[symbol].pop(0)
-    HISTORICAL_DATA_CACHE[symbol].append(live_update_data["kline"])
+    HISTORICAL_DATA_CACHE[symbol].append(new_kline_for_cache)
     LATEST_DATA_CACHE[symbol] = live_update_data 
     socketio.emit('new_kline_data', clean_nan_values(live_update_data))
-
-# --- WebSocket Connection Management ---
 # callback function that runs after received message
 def on_binance_message(ws, message_str):
     try:
@@ -349,8 +366,7 @@ def binance_websocket_listener():
     ws_app = websocket.WebSocketApp(SOCKET_URL, on_message=on_binance_message)
     ws_app.run_forever()
 
-# --- Background Scheduler for Historical Data ---
-    
+# Background Scheduler for Historical Data 
 # Find last timestamp from csv file 
 def get_latest_timestamp(symbol):
     try:
@@ -433,8 +449,7 @@ def run_data_collection_scheduler():
         schedule.run_pending()
         time.sleep(1)
 
-# --- USER INTERFACE ROUTES ---
-        
+# Routes for User Interface
 # Main index page
 @app.route('/')
 def index_page():
@@ -481,6 +496,11 @@ if __name__ == '__main__':
     print("="*60 + "\n   EXECUTING LATEST VERSION OF THE DASHBOARD   \n" + "="*60)
     load_all_models(ALL_ASSETS)
     load_chronos_models()
+    
+    # ===== ADD THIS LINE TO PRE-LOAD THE CACHE ON STARTUP =====
+    print("\n--- Populating historical data caches on startup... ---")
+    populate_initial_caches(ALL_ASSETS)
+
     
     # Get initial sentiment
     print("\n--- Fetching initial sentiment for all assets... ---")
