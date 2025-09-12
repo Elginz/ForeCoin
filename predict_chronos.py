@@ -51,7 +51,7 @@ def forecast_next_hour(df, values, context, pipeline, prediction_length=1):
     # For reproducible forecasts
     set_seed(42)
 
-    # Use pipline to forecast future prices, use only first item
+    # Use pipeline to forecast future prices, use only first item
     forecast = pipeline.predict(context, prediction_length) 
     forecast_np = forecast[0].numpy()
 
@@ -68,7 +68,7 @@ def forecast_next_hour(df, values, context, pipeline, prediction_length=1):
         # Error handler to use hourly data if not enough data 
         freq = pd.Timedelta(hours=1) 
     
-    # Generate timestamps for forcasting. Starts from next interval
+    # Generate timestamps for forecasting. Starts from next interval
     forecast_timestamps = pd.date_range(start=last_timestamp + freq, periods=prediction_length, freq=freq)
 
     return forecast_timestamps, median, low, high
