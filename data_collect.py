@@ -1,5 +1,3 @@
-# data_collect.py
-
 """
 This file contains helper functions used to collect market data.
 
@@ -12,8 +10,6 @@ from binance.client import Client
 import pandas as pd
 from datetime import datetime
 import os
-
-# *** the old data used for model training is in historic_data, it saves from 2020-01-01 to 2025-06-07 ****
 
 
 #  Helper Function to get the correct time interval 
@@ -59,7 +55,7 @@ def save_or_update_csv(new_df, symbol, output_folder):
 def fetch_and_save_data(symbols, start_date_str, end_date_str, output_folder, interval_str="1hr", api_key=None, api_secret=None):
     """
     fetch  OHLCV data for given symbols and saves it to a specified folder.
-
+    
         symbols (list): list of trading symbols (e.g., ['BTCUSDT']).
         start_date_str (str): The start date in 'YYYY-MM-DD' format.
         end_date_str (str): The end date in 'YYYY-MM-DD' format.
