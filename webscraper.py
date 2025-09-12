@@ -33,36 +33,45 @@ def scrape (crypto_coin):
     article_list = []
     for entry in search_entries["entries"]:
         article_list.append(entry["title"])
-        # Set a delay betwen processing articles to avoid errors in news servers.
+        # Set a delay between processing articles to avoid errors in news servers.
         time.sleep(0.25)
     return article_list
 
 
 # Returns the following:
-#  Overall Score = (sum of weighted scores) / (sum of all confidence score)
+#  Overall Score = (sum of weighted scores) / (sum of all confidence scores)
 #  Overall confidence = (sum of all confidence scores) / (number of articles)
 def determine_sentiment(crypto_coin):
     # Get list of news headlines 
     article_list = scrape(crypto_coin)
+
     # Error handler for when no articles are found
     if not article_list:
-        return 0.0, 0.0
-    
-    total_score = 0
-    total_confidence = 0
+        return 0.0, 0.0  
 
+    total_weighted_score = 0
+    total_confidence = 0
+    
+    # Loop through the article title.
     for entry in article_list:
         # Call FinBert model for sentiment prediction and confidence score
         prediction, confidence = predict_sentiment(entry)
-
-        # Get simple average.
-        # Negative:-1 , Neutral: 0, Positive: 1 
-        total_score += prediction
+        
+        # Multiply the prediction by its confidence to get a weighted score.
+        total_weighted_score += prediction * confidence
+        
+        # Track the sum of all confidence scores 
         total_confidence += confidence
+        
+    # Normalize the score between -1.0 to 1.0.
+    if total_confidence > 0:
+        final_score = total_weighted_score / total_confidence
+    else:
+        # Error handler if divided by zero
+        final_score = 0.0 
 
-    # Get average score and confidence
-    final_score = total_score/len(article_list)
-    final_confidence = total_confidence/len(article_list)
+    # The final confidence is the average confidence across all articles.
+    final_confidence = total_confidence / len(article_list)
 
     return final_score, final_confidence
 
