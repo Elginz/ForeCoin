@@ -8,12 +8,17 @@
         <div class="card border-0 shadow">
             <div class="card-header"><h2 class="fs-5 fw-bold mb-0">Volatile Coins (5-Min Kline)</h2></div>
             <div class="card-body">
+                <!-- Card for individual Stable Coins (DOGEUSDT, SHIBUSDT) -->
                 <div class="row">
                     {% for asset_symbol in assets %}
-                    <div class="col-12 col-md-6 mb-4">
+                    <div class="col-12 mb-4">
                         <div class="card prediction-card" id="card-{{ asset_symbol }}">
-                            <div class="card-header bg-dark text-white"><h5 class="card-title mb-0">{{ asset_symbol }}</h5></div>
+                            <div class="card-header bg-dark text-black">
+                            <h5 class="card-title mb-0" 
+                            data-search-content="{{ (asset_names.get(asset_symbol, '') + ' ' + asset_symbol) | lower }}">
+                            {{ asset_symbol }}</h5></div>
                             <div class="card-body">
+
                                 <!-- Initial data is pre-populated by Flask/Jinja2 -->
                                 {% set data = initial_data.get(asset_symbol, {}) %}
                                 {% set kline = data.get('kline', {}) %}
@@ -31,8 +36,7 @@
                                     </span>
                                 </p>
                                 <hr class="my-2">
-
-                                <!-- **MODIFIED: Display LightGBM Quantile Predictions** -->
+                                <!-- LGBM with Quantile Regression Prediction -->
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <p class="mb-0"><strong>LGBM Forecast:</strong></p>
                                     <span id="lgbmSignal-{{ asset_symbol }}" class="badge bg-secondary">N/A</span>
@@ -53,7 +57,6 @@
                                 </div>
                                 
                                 <hr class="my-2">
-
                                 <!-- Chronos T5 Prediction -->
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <p class="mb-0"><strong>Chronos T5:</strong> 
@@ -64,12 +67,12 @@
                                     <span id="chronosSignal-{{ asset_symbol }}" class="badge bg-secondary">N/A</span>
                                 </div>
                                 <hr class="my-2">
-
-                                <!-- Sentiment Analysis -->
+                                <!-- News Sentiment Prediction -->
                                 <div>
-                                    <p class="mb-1"><strong>News Sentiment:</strong>
-                                        <span id="sentimentLabel-{{ asset_symbol }}" class="badge bg-secondary">{{ sentiment.get('label', 'N/A') | capitalize }}</span>
-                                    </p>
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <p class="mb-0"><strong>News Sentiment:</strong></p>
+                                        <span id="sentimentLabel-{{ asset_symbol }}" class="badge bg-secondary">{{ sentiment.get('label', 'N/A') }}</span>
+                                    </div>
                                     <p class="mb-1"><strong>Sentiment Score:</strong> <span id="sentimentScore-{{ asset_symbol }}">{{ "%.2f" % (sentiment.get('score', 0) * 100) if sentiment.get('score') is not none else 'N/A' }} %</span></p>
                                     <p class="mb-1"><strong>AI Confidence:</strong> <span id="sentimentConfidence-{{ asset_symbol }}">{{ "%.2f" % (sentiment.get('confidence', 0) * 100) if sentiment.get('confidence') is not none else 'N/A' }} %</span></p>
                                 </div>
@@ -87,10 +90,10 @@
 
 {% block javascripts %}
     <script>
-        // Pass initial historical data from Flask to JavaScript
+        // Pass initial historical data from Flask to JavaScript (Flask/Jinja2 application)
         var initialChartData = {{ historical_data | tojson | safe }};
     </script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <script src="{{ url_for('static', filename='assets/js/volatile_updater.js') }}"></script>
 {% endblock javascripts %}
