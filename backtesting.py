@@ -35,21 +35,21 @@ HIGH_VOLATILITY_ASSETS = ['DOGEUSDT', 'SHIBUSDT']
 ALL_ASSETS = STABLE_ASSETS + HIGH_VOLATILITY_ASSETS
 
 # --- Backtesting Parameters ---
-#TO check accuracy over the last 5 predictions.
+#To check accuracy over the last 5 predictions.
 VALIDATION_WINDOW = 5
 # Must have at least 3/5 (60%) correct predictions.
 ACCURACY_THRESHOLD = 0.6  
 
-# This class is used to predict generation, validation, logging and retraining triggers
+# ModelValidator class is used to predict generation, validation, logging and retraining triggers
 class ModelValidator:
-    # initialises modelValidator
+    # Initialises modelValidator
     def __init__(self):
         self.prediction_logs = {symbol: [] for symbol in ALL_ASSETS}
         os.makedirs(LOG_FOLDER, exist_ok=True)
         self.log_file_path = os.path.join(LOG_FOLDER, "backtest_log.json")
         self.load_logs()
 
-    # To load previous validation logs form a file
+    # To load previous validation logs from a file
     def load_logs(self):
         # If the path exists
         if os.path.exists(self.log_file_path):
@@ -62,14 +62,15 @@ class ModelValidator:
                 print(f"Could not load logs, starting fresh. Error: {e}")
         else:
             print("No existing log file found. Starting fresh.")
-    # To save the logs
+    
+    # To save the current logs to a file
     def save_logs(self):
-        """Saves the current validation logs to a file."""
         try:
             with open(self.log_file_path, 'w') as f:
                 json.dump(self.prediction_logs, f, indent=4)
         except Exception as e:
             print(f"Error saving prediction logs: {e}")
+    
     # Find the latest data csv 
     def find_asset_data_file(self, symbol):
         subfolder = 'stable' if symbol in STABLE_ASSETS else 'volatile'
@@ -77,12 +78,10 @@ class ModelValidator:
         files = glob.glob(search_path)
         return max(files, key=os.path.getmtime) if files else None
     
+    # Generates new prediction, using current production model. 
     def make_prediction(self, symbol):
-        """
-        Generates a new prediction for an asset using its current production model.
-        This logic is adapted from your app.py to be compatible.
-        """
         try:
+            # Load the model
             model_type = "knn_supertrend" if symbol in STABLE_ASSETS else "lgbm_quantile"
             model_path = os.path.join(MODELS_FOLDER, f"{symbol}_{model_type}_model.pkl")
             if not os.path.exists(model_path):
@@ -90,19 +89,22 @@ class ModelValidator:
                 return None, None
 
             model_package = joblib.load(model_path)
-            
+
+            # Load the data
             file_path = self.find_asset_data_file(symbol)
-            if not file_path: return None, None
+            if not file_path: 
+                return None, None
             df = pd.read_csv(file_path, parse_dates=['timestamp'])
             
             # Use last 200 rows for feature calculation
             latest_data = df.tail(200).copy()
-            if len(latest_data) < 20: return None, None
+            if len(latest_data) < 20: 
+                return None, None
             
             current_price = float(latest_data.iloc[-1]['close'])
-
+            # Prepare features and predict based on model type
             if symbol in STABLE_ASSETS:
-                # Replicate K-NN feature engineering from models.py
+                # Use helper function to prepare KNN
                 latest_data.ta.supertrend(length=10, multiplier=3.0, append=True)
                 latest_data['price_change'] = latest_data['close'].pct_change()
                 latest_data['volatility'] = latest_data['close'].rolling(window=10).std()
@@ -114,17 +116,16 @@ class ModelValidator:
                     print(f"Not enough data for {symbol} after feature engineering. Skipping.")
                     return None, None
                 
-                # ===== START FIX =====
-                # Get the exact list of feature columns the model was trained on
+                # Get exact list of feature columns the model was trained on
                 expected_features = model_package.get('feature_columns')
                 if not expected_features:
                     print(f"ERROR: 'feature_columns' not found in model package for {symbol}.")
                     return None, None
                 
-                # Select ONLY those features from the latest data point
+                # Select only the features from latest data point
                 features_for_prediction = latest_data.tail(1)[expected_features]
-                # ===== END FIX =====
-                
+
+                # predict using pipeline
                 pipeline = model_package.get('pipeline')
                 predicted_price = pipeline.predict(features_for_prediction)[0]
                 return current_price, float(predicted_price)
@@ -216,10 +217,9 @@ class ModelValidator:
         except Exception as e:
             print(f"  An error occurred during retraining: {e}")
 
+# Main function
 def main():
-    """Main function to set up and run the schedule."""
     validator = ModelValidator()
-    
     print("="*80)
     print(" Automated Model Backtester and Retraining Service")
     print(f" -> This script will run every hour at XX:30")
