@@ -29,7 +29,6 @@ def get_api_interval(interval_str):
         raise ValueError("Unsupported time interval: choose from '1min', '5min', '1hr', '12hr', '1day'")
     return interval
 
-
 # Function to save data into same CSV file  
 def save_or_update_csv(new_df, symbol, output_folder):
     # Path for output file 
@@ -47,14 +46,13 @@ def save_or_update_csv(new_df, symbol, output_folder):
     else:
         # If file doesnt exist, new data
         combined = new_df
-
     combined.to_csv(path, index=False)
 
 
 #  Function to Fetch and Save Data 
 def fetch_and_save_data(symbols, start_date_str, end_date_str, output_folder, interval_str="1hr", api_key=None, api_secret=None):
     """
-    fetch  OHLCV data for given symbols and saves it to a specified folder.
+        OHLCV data for the following
     
         symbols (list): list of trading symbols (e.g., ['BTCUSDT']).
         start_date_str (str): The start date in 'YYYY-MM-DD' format.
@@ -98,7 +96,6 @@ def fetch_and_save_data(symbols, start_date_str, end_date_str, output_folder, in
             
             # Keep only the essential columns for the models
             df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
-
             print(f"Successfully fetched {len(df)} records for {symbol}.")
 
             # Save to CSV with the 'timestamp' column, not as an index.
