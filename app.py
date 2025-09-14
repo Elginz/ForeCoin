@@ -81,8 +81,6 @@ LATEST_DATA_CACHE = {}
 
 # Finds data CSV file for certain assets
 def find_asset_data_file(symbol):
-    # subfolder = 'stable' if symbol in STABLE_ASSETS else 'volatile'
-
     if symbol in STABLE_ASSETS:
         subfolder = 'stable'
     else:
