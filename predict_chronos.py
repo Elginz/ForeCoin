@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from transformers import set_seed
 
-# These paths are typically used for initial data loading in a script's main block
+# Paths typically used for initial data loading in a script's main block
 # In a web application, these are usually managed by the main app.py file
 BTCUSDT = './historic_data/stable/BTCUSDT_data.csv'
 BNBUSDT = './historic_data/stable/BNBUSDT_data.csv'
@@ -73,11 +73,8 @@ def forecast_next_hour(df, values, context, pipeline, prediction_length=1):
 
     return forecast_timestamps, median, low, high
 
-
+# Function to plot historical data and the Chronos Forecast into a graph (can be used if needed)
 def plot_forecast(df, values, forecast_timestamps, median, low, high, lookback=100):
-    """
-    Plots the historical data and the Chronos forecast.
-    """
     plt.figure(figsize=(10, 5))
     
     historical_timestamps = df["timestamp"].iloc[-lookback:]
