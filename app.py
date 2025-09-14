@@ -19,7 +19,6 @@ import glob
 import joblib 
 import pandas as pd
 import pandas_ta as ta
-import numpy as np
 import torch 
 
 # Scheduling libaries
@@ -57,6 +56,7 @@ ASSET_NAMES = {
     'DOGEUSDT': 'Dogecoin',
     'SHIBUSDT': 'Shiba Inu'
 }
+
 # --- Map asset symbols to search queries ---
 ASSET_QUERIES = { 'BTCUSDT': BTC_QUERY, 
                   'ETHUSDT': ETH_QUERY, 
@@ -81,7 +81,13 @@ LATEST_DATA_CACHE = {}
 
 # Finds data CSV file for certain assets
 def find_asset_data_file(symbol):
-    subfolder = 'stable' if symbol in STABLE_ASSETS else 'volatile'
+    # subfolder = 'stable' if symbol in STABLE_ASSETS else 'volatile'
+
+    if symbol in STABLE_ASSETS:
+        subfolder = 'stable'
+    else:
+        subfolder = 'volatile'
+
     simple_path = os.path.join(BASE_DATA_FOLDER, subfolder, f"{symbol}_data.csv")
     if os.path.exists(simple_path):
         return simple_path
@@ -94,7 +100,8 @@ def find_asset_data_file(symbol):
 
 # Format ISO timestamp into readable format for UI
 def format_iso_timestamp(iso_string):
-    if not iso_string or 'T' not in str(iso_string): return 'N/A'
+    if not iso_string or 'T' not in str(iso_string): 
+        return 'N/A'
     try:
         dt_object = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
         return dt_object.strftime('%Y-%m-%d (%H:%M:%S UTC)')
@@ -200,7 +207,8 @@ def load_chronos_models():
 def update_single_sentiment(symbol):
     with SENTIMENT_LOCK:
         query = ASSET_QUERIES.get(symbol)
-        if not query: return
+        if not query:
+            return
         
         print(f"--- Updating sentiment for {symbol}... ---")
         try:
@@ -342,6 +350,7 @@ def process_kline_and_predict(kline_message_data):
     HISTORICAL_DATA_CACHE[symbol].append(new_kline_for_cache)
     LATEST_DATA_CACHE[symbol] = live_update_data 
     socketio.emit('new_kline_data', clean_nan_values(live_update_data))
+
 # callback function that runs after received message
 def on_binance_message(ws, message_str):
     try:
@@ -463,7 +472,6 @@ def index_page():
 @app.route('/dashboard')
 def dashboard_page():
     populate_initial_caches(ALL_ASSETS)
-    # Add ASSET_NAMES dictionary (see next point)
     return render_template('home/dashboard.html', 
                            assets=ALL_ASSETS, 
                            asset_names=ASSET_NAMES,
@@ -493,11 +501,11 @@ def volatile_page():
 # --- Main Application ---
 if __name__ == '__main__':
     # Load al models
-    print("="*60 + "\n   EXECUTING LATEST VERSION OF THE DASHBOARD   \n" + "="*60)
+    print("="*60 + "\n EXECUTING LATEST VERSION OF THE DASHBOARD   \n" + "="*60)
     load_all_models(ALL_ASSETS)
     load_chronos_models()
     
-    # ===== ADD THIS LINE TO PRE-LOAD THE CACHE ON STARTUP =====
+    #  Preload cache on startup
     print("\n--- Populating historical data caches on startup... ---")
     populate_initial_caches(ALL_ASSETS)
 
