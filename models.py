@@ -3,17 +3,17 @@ The models.py file is used to train the models and load it in under Model_traini
 - LightGBM (Quantile Regression) 
 - K- Nearest Neighbours (Supertrend) 
 """
-
+# Import required Libraries
 import pandas as pd
 import pandas_ta as ta
-import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 import lightgbm as lgb
 import joblib
 import os
-# Import required modules
+
+# Required modules
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
 from sklearn.feature_selection import SelectKBest, f_regression
