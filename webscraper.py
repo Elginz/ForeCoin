@@ -48,7 +48,6 @@ def determine_sentiment(crypto_coin):
     # Error handler for when no articles are found
     if not article_list:
         return 0.0, 0.0  
-
     total_weighted_score = 0
     total_confidence = 0
     
