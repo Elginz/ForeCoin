@@ -1,101 +1,117 @@
 # ForeCoin 
 
-There are two bots currently. These are 
-<a href="https://t.me/HostingSG_bot">@HostingSG_bot</a> and <a href="https://t.me/HostingSG_Owners_bot">@HostingSG_Owners_bot</a> 
+This is the implementation of project 4.2: Financial Advisor Bot. It creates a bot that analyses financial data of crypto currencies
+in order to make recommendations for a dynamic investment strategy. 
 
-They work differently. ```HostingSG_bot``` serves as a frontend for customers, while ```HostingSG_Owners_bot``` serves owners. 
-They are both utilising the same mysql database. 
+The bot currently works with 5 cryptocurrencies
+
+Stable Coins: BTCUSDT, ETHUSDT, BNBUSDT
+Volatile Coins: DOGEUSDT, SHIBUSDT
 ______
-<h3 align="center">📚Dependencies/Libraries📖</h3>
+<h3 align="center">🖥️ How to run 🏃</h3>
 
 Run the requirements.txt file 
 - ```pip install -r requirements.txt```
 
-**OR**
+then run the following 
 
-Run this in terminal to download the following libraries/dependencies  
+- ```pip install --upgrade --force-reinstall "feedparser>=6.0.10"```
 
-- ```pip install python-telegram-bot aiohttp aiomysql mysql-connector-python pytz```
+(As ```pygooglenews``` strictly requires ```feedparser``` to be less than version 6.0.0, we would need to forcibly upgrade it)
 
-
-Make sure you're using python-telegram-bot v20+, because the code uses ```Application```, ```ContextTypes```, ```filters```, and ```ParseMode``` as per the v20+ API.
-- ```pip install python-telegram-bot==20.7 mysql-connector-python```
-
-*Some dependencies/libraries and their Reasons*
-- ``` python-telegram-bot``` for telegram
-- ``` aiomysql``` for async MySQL database connections
-- ``` aiohttp``` to fetch the image over HTTP asynchronously
-- ``` pytz``` For handling timezone (Asia/Singapore):
-
-(May need to install this for the bot token. It is still hardcoded in the files, so storing in and ```.env``` file may be better for security)
-- ```pip install python-dotenv```
 ______
-<h3 align="center">🗃️Project Structure🗃️</h3>
+<h3 align="center">🗃️System Architecture🗃️</h3>
 
-This is the current <a href="https://www.canva.com/design/DAGcsg9Km-w/pKuvo6Kr6qjcPzAmaUUcPw/edit"> User and Host Flowchart</a> 
+*insert image of system architecture here*
 
-- Backups: *This is just a backup of the other files*
-- random: *Files that i just keep as i may want to use it next time*
-- owners: *Codes for Owners*
+*Explain briefly on the system architecture*
+
 
 ```
-project/
+ForeCoin/
 │
-├── Backups/            
-│   ├── hostOwners copy.py
-│   └── hostSG copy.py
-│   ├── main_copy.sql
-│   └── Menu Copy.py
-├── random/            
-│   ├── examples.sql
-│   └── token.env
-├── owners/             
-│   ├── __init__.py
-│   └── db.py            
-│   └── Menu.py          
-│   └── Profiles.py      
+├── apps/
+│   ├── static/
+│   │   └── assets/
+│   │        ├── package.json/
+│   |        ├── css/
+│   |        ├── img/
+│   |        ├── vendor/
+│   |        └── js/
+│   |            ├── dashboard_updater.js
+│   |            ├── index_search.js
+│   |            ├── stable_updater.js
+│   |            ├── volatile_updater.js
+│   |            └── volt.js
+|   |
+│   └── templates/
+│       └── home/
+│           ├── index.html
+│           ├── dashboard.html
+│           ├── stable.html
+│           └── volatile.html
+│       └── includes/
+│           ├── footer.html
+│           ├── navigation.html
+│           ├── scripts.html
+│           └── sidebar.html
+│       └── layouts/
+│           ├── base-fullscreen.html
+│           └── base.html
 |
-├── hostOwners.py  
-├── hostSG.py   
-├── main.sql   
+├── historic_data/
+│   ├── sentiment (can remove)/
+│   ├── stable/
+│   ├── volatile/
+│   └── *all_coins_chronos_pred.csv*
+│
+├── trained_models/
+│   ├── BNBUSDT_knn_supertrend_model.pkl
+│   ├── BTCUSDT_knn_supertrend_model.pkl
+│   ├── ETHUSDT_knn_supertrend_model.pkl
+│   ├── DOGEUSDT_lgbm_quantile_model.pkl
+│   ├── SHIBUSDT_lgbm_quantile_model.pkl
+│   └── *all_coins_chronos_pred.csv*
+|
+├── trained_models/
+│   ├── backtest_log.json
+│   ├── BNBUSDT_predictions.json
+│   ├── BTCUSDT_predictions.json
+│   ├── ETHUSDT_predictions.json
+│   ├── SHIBUSDT_predictions.json
+│   └── dogeUSDT_predictions.json
+|
+├── app.py
+├── backtesting.py
+├── data_collect.py
+├── models.py
+├── predict_chronos.py
+├── sentiment_bert.py
+├── webscraper.py
+├── readme.md
 └── requirements.txt
 ```
 ______
 
-<h3 align="center">🖥️ How to run 🏃</h3>
+<h4 align="center">AI models used</h4>
 
-First, create a mysql database within your pc, using the mysql script ```main.sql```
+**KNN With Supertrend** 
 
-**HostingSG_boty**
-- ```python hostSG.py```
-  
-**HostingSG_Owners_bot**
-- ```python hostOwners.py```
+add words here
+
+**LGBM with Quantile Regression** 
+
+add words here
+
+**Chronos T5** 
+
+add words here
+
+**FinBERT for Sentiment Analysis** 
+
+add words here
+
 ______
-<h3 align="center">🆘Current work in progress (help needed!)🆘</h3>
+**Flask**
+add words here
 
-**Host Owners** 
-
-Currently requires a timetable booking scheduler. 
-- Hosts need to determine how their timeslots are seperated (```15 minutes```, ```30 minutes```, ```1 Hour```)
-- Hosts can get a _prompt_ of user's bookings and decide if they can ```cancel```, ```reject``` ```accept``` them. They are able to accept more than 1 booking per time slot. (need to think about it again)
-
-Here is a list of bot bookings for consideration
-
-- <a href="https://www.youtube.com/watch?v=ykm2T2Jm8yc"> Youtube: Reservation Telegram Bot using Python</a> 
-- <a href="https://github.com/AlexBaranovIT/Reservation-Telegram-bot/tree/main"> Github: Reservation-Telegram_bot</a> 
-- <a href="https://github.com/AndrewAkhmetov/BookingTelegramBot"> Github: Booking Telegram Bot</a> 
-______
-**Host Users**
-- Need to debug it as i changed host owners quite abit
-- Users need to select the hosts based on the enquires provided to them
-- users can select the respective time slots to book an appointment
-- Users will get a _prompt_ if the host ```accept```/```reject```/```cancel``` their booking
-______
-**Payment Systems**
-
-This can be done later or last. Here are some possible payment service providers for the platform.
-
-This one seems quite interesting with a lot of integration possibilities to common payment methods in SG: https://hitpayapp.com/
-
-Also they provide the full REST APIs  in their documentation: https://docs.hitpayapp.com/apis/overview , and they don' have a setup cost/subscription; only transaction cost. Might be interesting to check them out more.
