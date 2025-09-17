@@ -1,7 +1,46 @@
-pip3 install transformers
-pip3 install torch 
-pip install "numpy<2"
-pip install torch torchvision torchaudio
-pip install "git+https://github.com/amazon-science/chronos-forecasting.git#egg=chronos-forecasting"
-pip install flask flask-socketio python-socketio websocket-client pandas numpy scikit-learn joblib
-pip install lightgbm
+# Web Application & Real-time Communication
+flask
+flask-socketio
+websocket-client
+
+# Machine Learning & Deep Learning
+torch
+torchvision
+torchaudio
+transformers
+scikit-learn
+lightgbm
+joblib
+pandas
+pandas-ta
+numpy<2.0
+
+# Time Series Forecasting (from GitHub)
+chronos-forecasting @ git+https://github.com/amazon-science/chronos-forecasting.git#egg=chronos-forecasting
+
+# Data Collection & Scheduling
+python-binance
+schedule
+
+# Sentiment Analysis & Web Scraping
+# Note: feedparser 6.0+ is required for Python 3.11 compatibility
+# despite pygooglenews preferring <6.0.0, it works with --force-reinstall
+feedparser
+pygooglenews==0.1.2
+newspaper3k
+beautifulsoup4
+requests
+
+# Additional dependencies
+pytz
+
+# Optional for Development/Plotting
+matplotlib
+
+# IF THERE IS AN ERROR: Run the following after initiial installation of requirements
+
+# pip install --upgrade --force-reinstall "feedparser>=6.0.10"
+
+# EXPLANATION: It is logically impossible for pip to install a version of feedparser that is both greater than or equal to 6.0 and 
+# less than 6.0 at the same time. This is why it fails with a ResolutionImpossible error.
+
