@@ -1,11 +1,13 @@
-# ForeCoin 
+# ForeCoin
 
-This is the implementation of project 4.2: Financial Advisor Bot. It creates a bot that analyses financial data of crypto currencies
-in order to make recommendations for a dynamic investment strategy. 
+This is the implementation of project 4.2: Financial Advisor Bot.
+
+This web application is a real-time cryptocurrency analysis tool that uses artificial intelligence to provide market insights in order to make recommendations for a dynamic investment strategy. 
 ______
 <h3 align="center">About the Bot</h3>
 
-Our AI-powered cryptocurrency advisor combines cutting-edge machine learning models to provide comprehensive market analysis. The system continuously monitors market data and news sentiment to deliver real-time insights for informed trading decisions.
+The analysis tool uses artificial intelligence to provide market insights. It combines two primary AI models: a sentiment analysis model that scans live news to gauge market mood, and a time-series forecasting model (Chronos-T5) to predict future price movements. Navigate to the Dashboard for a market overview, or visit the "Stable" and "Volatile" coin pages for detailed, asset-specific predictions.
+
 
 The bot currently works with 5 cryptocurrencies
 
@@ -13,7 +15,7 @@ The bot currently works with 5 cryptocurrencies
 
 **Volatile Coins:** DOGEUSDT, SHIBUSDT
 ______
-<h3 align="center">🖥️ How to run 🏃</h3>
+<h3 align="center">🖥️ Getting Started 🏃</h3>
 
 Run the requirements.txt file 
 - ```pip install -r requirements.txt```
@@ -26,7 +28,7 @@ then run the following
 
 ______
 
-<h3 align="center">AI models used</h3>
+<h3 align="center">The Machine Learning Models</h3>
 
 **KNN With Supertrend** 
 
