@@ -93,7 +93,7 @@ ForeCoin/
 ```
 ______
 
-<h4 align="center">AI models used</h4>
+<h3 align="center">AI models used</h3>
 
 **KNN With Supertrend** 
 
