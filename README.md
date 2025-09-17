@@ -66,6 +66,8 @@ ______
 
 *insert image of system architecture here*
 
+![Alt Text for the image](readme_assets/FYP System architecture.png)
+
 *Explain briefly on the system architecture*
 
 
