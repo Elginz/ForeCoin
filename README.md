@@ -1,4 +1,5 @@
-# ForeCoin ![Logo](readme_assets/ForeCoin.png)
+![Logo](readme_assets/ForeCoin.png)
+# ForeCoin
 
 
 This is the implementation of project 4.2: Financial Advisor Bot.
