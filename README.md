@@ -2,11 +2,16 @@
 
 This is the implementation of project 4.2: Financial Advisor Bot. It creates a bot that analyses financial data of crypto currencies
 in order to make recommendations for a dynamic investment strategy. 
+______
+<h3 align="center">About the Bot</h3>
+
+Our AI-powered cryptocurrency advisor combines cutting-edge machine learning models to provide comprehensive market analysis. The system continuously monitors market data and news sentiment to deliver real-time insights for informed trading decisions.
 
 The bot currently works with 5 cryptocurrencies
 
-Stable Coins: BTCUSDT, ETHUSDT, BNBUSDT
-Volatile Coins: DOGEUSDT, SHIBUSDT
+**Stable Coins:** BTCUSDT, ETHUSDT, BNBUSDT
+
+**Volatile Coins:** DOGEUSDT, SHIBUSDT
 ______
 <h3 align="center">🖥️ How to run 🏃</h3>
 
@@ -18,6 +23,28 @@ then run the following
 - ```pip install --upgrade --force-reinstall "feedparser>=6.0.10"```
 
 (As ```pygooglenews``` strictly requires ```feedparser``` to be less than version 6.0.0, we would need to forcibly upgrade it)
+
+______
+
+<h3 align="center">AI models used</h3>
+
+**KNN With Supertrend** 
+
+We monitor major cryptocurrencies including Bitcoin (BTC), Ethereum (ETH), and Binance Coin (BNB). These stable assets are analyzed using specialized KNN Supertrend models optimized for less volatile market movements.
+
+**LGBM with Quantile Regression** 
+
+For high-volatility cryptocurrencies like Dogecoin (DOGE) and Shiba Inu (SHIB), we employ LGBM Quantile models that provide low, median, and high prediction ranges to account for their unpredictable price movements.
+
+**Chronos T5** 
+
+The Chronos-T5 time-series forecasting model analyzes historical price data to predict future cryptocurrency prices. Combined with traditional machine learning models like KNN and LGBM, we provide multiple prediction perspectives for enhanced accuracy.
+
+
+**FinBERT for Sentiment Analysis** 
+
+The sentiment analysis component scans cryptocurrency-related news articles and social media posts to determine the overall market sentiment. This helps identify potential market movements based on public opinion and news events.
+
 
 ______
 <h3 align="center">🗃️System Architecture🗃️</h3>
@@ -91,26 +118,6 @@ ForeCoin/
 ├── readme.md
 └── requirements.txt
 ```
-______
-
-<h3 align="center">AI models used</h3>
-
-**KNN With Supertrend** 
-
-add words here
-
-**LGBM with Quantile Regression** 
-
-add words here
-
-**Chronos T5** 
-
-add words here
-
-**FinBERT for Sentiment Analysis** 
-
-add words here
-
 ______
 **Flask**
 add words here
