@@ -1,4 +1,4 @@
-## Download CSV FILES
+## Download CSV Files
 
 As the CSV files are relatively big, not all files such as the full CSV files are loaded into this github repository.
 
