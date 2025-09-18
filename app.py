@@ -404,13 +404,13 @@ def update_assets_data(asset_list, asset_type):
         # Get last timestamp stored in CSV file
         latest_timestamp = get_latest_timestamp(symbol)
         
+        # This is the fully corrected code block
         if latest_timestamp:
-            # Fetch from 1 minute after last data point 
-            start_str = (latest_timestamp + timedelta(minutes=1)).strftime("%d %b, %Y %H:%M:%S")
+            # Use the simple, compatible YYYY-MM-DD HH:MM:SS format
+            start_str = (latest_timestamp + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S')
         else:
-            # If file is empty, start from last historical date
-            start_str = "1 Jan, 2020"
-
+            # Use the simple, compatible YYYY-MM-DD format for the initial fetch
+            start_str = "2020-01-01"
         # Set end_str to None so API fetches all data up to current
         end_str = None
         
