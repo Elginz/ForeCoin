@@ -26,6 +26,7 @@ schedule
 # Note: feedparser 6.0+ is required for Python 3.11 compatibility
 # despite pygooglenews preferring <6.0.0, it works with --force-reinstall
 feedparser
+dateparser>=1.2.0
 pygooglenews==0.1.2
 newspaper3k
 beautifulsoup4
