@@ -1,6 +1,6 @@
 # ForeCoin
 
-<img src="readme_assets/ForeCoin.png" alt="ForeCoin Logo" width="150"/> 
+<img src="apps/static/assets/img/ForeCoin.png" alt="ForeCoin Logo" width="150"/> 
 
 This is the implementation of project 4.2: Financial Advisor Bot.
 
