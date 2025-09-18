@@ -68,7 +68,7 @@ ______
 
 *insert image of system architecture here*
 
-![Alt Text for the image](readme_assets/system_architecture.png)
+![Alt Text for the image](apps/static/assets/img/system_architecture.png)
 
 *Explain briefly on the system architecture*
 
