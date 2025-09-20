@@ -30,7 +30,7 @@ List of folders that can be downloaded:
 - **prediction_logs**
 - **_pycache_**
 
-
+***How to run***
 
 Run the requirements.txt file 
 - ```pip install -r requirements.txt```
