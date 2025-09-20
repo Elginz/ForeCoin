@@ -137,7 +137,3 @@ ForeCoin/
 ├── readme.md
 └── requirements.txt
 ```
-______
-**Flask**
-add words here
-
