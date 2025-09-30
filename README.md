@@ -19,7 +19,7 @@ The bot currently works with 5 cryptocurrencies
 ______
 <h3 align="center">🖥️ Getting Started 🏃</h3>
 
-When forking this repository, downlad the following folders from [ForeCoin's Additional Folders](https://drive.google.com/drive/folders/1Kjud_lSsUpXyWbvnWEUV0b0rf-ev2BmF?usp=sharing)
+When forking this repository, download the following folders from [ForeCoin's Additional Folders](https://drive.google.com/drive/folders/1Kjud_lSsUpXyWbvnWEUV0b0rf-ev2BmF?usp=sharing)
 
 As some files are relatively big, not all files are loaded into this github repository.
 
