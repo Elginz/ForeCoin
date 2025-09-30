@@ -66,12 +66,7 @@ The sentiment analysis component scans cryptocurrency-related news articles and 
 ______
 <h3 align="center">🗃️System Architecture🗃️</h3>
 
-*insert image of system architecture here*
-
 ![Alt Text for the image](apps/static/assets/img/system_architecture.png)
-
-*Explain briefly on the system architecture*
-
 
 ```
 ForeCoin/
